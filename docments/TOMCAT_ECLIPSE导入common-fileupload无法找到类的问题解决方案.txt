@@ -1,0 +1,1 @@
+project -> property -_> Deployment Assembly --> Add "Java Build Path Entries" --> 选择WebContent\WEB-INF\lib 完成即可！

@@ -1,0 +1,139 @@
+本教程以Apache组织的commons项目中的FileUpload项目做为jsp的文件上传组件,FileUpload项目完全尊守RFC1867规范中
+关于在HTTP request 中通过Post方法提交文件的规范,该项目性能稳定快速,易于部署和使用.
+本次教程以前端jsp + 后端 servlet的方式上传文件,你也可以完全在jsp中实现而不用servlet.
+在开始之前你要准备以下几个东西:
+1. commons-FileUpload 1.2 包 
+  下载地址:http://jakarta.apache.org/commons/fileupload/
+2. commons-IO 1.3.1 包 
+  下载地址:http://jakarta.apache.org/commons/io/
+3. Commons-BeanUtils 1.7 包 
+  下载地址:http://jakarta.apache.org/commons/beanutils/
+
+
+有了上面这些东西我们就可以开始了
+===============================================================================
+1. 新建一个叫upload的WEB项目(我用的是Lomboz3.2开发环境)
+2. 把上面下载下来的包分别解压并拷贝*.jar的文件到上面那个项目的WEB-INF/lib目录中
+3.接下来我们要准备一份如下内容的upload.jsp文件,用来选择要上传的文件,
+<html>
+<head>
+<title>Jsp+Servlet upload file</title>
+</head>
+<body>
+  <form name="upform" action="UploadServlet" method="POST" enctype="multipart/form-data">
+    <input type ="file" name="file1" id="file1"/><br/>
+    <input type ="file" name="file2" if="file2"/><br/>
+    <input type ="file" name="file3" id="file3"/><br/>
+    <input type="submit" value="Submit" /><br/>
+    <input type="reset" />
+  </form>
+</body>
+</html>
+
+上面文件中有几个需要注意的地方就是
+1. action="UploadServlet" 必须和后面的web.xml配置文件中对servlet映射必须保持一致.
+2. method="POST" 这里必须为"POST"方式提交不能是"GET".
+3. enctype="multipart/form-data" 这里是要提交的内容格式,表示你要提交的是数据流,而不是普通的表单文本.
+4. file1,file2,file3表示你要3个文件一起上传,你也可以一次只上传一个文件.
+===================================================================================
+
+接下来我们要写一个与上面这个upload.jsp配套的servlet程序,就叫做UploadServlet.java吧
+以下是该servlet的详细代码:
+看上去有点长,不过并不复杂,很容易明白的.
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.fileupload.DefaultFileItemFactory;
+import org.apache.commons.fileupload.FileItemFactory;
+import org.apache.commons.fileupload.FileItemIterator;
+import org.apache.commons.fileupload.FileItemStream;
+import org.apache.commons.fileupload.disk.DiskFileItemFactory;
+import org.apache.commons.fileupload.servlet.ServletFileUpload;
+import org.apache.commons.fileupload.util.Streams;
+
+/**
+* Servlet implementation class for Servlet: UploadServlet
+*
+*/
+public class UploadServlet extends javax.servlet.http.HttpServlet implements javax.servlet.Servlet {
+    File tmpDir = null;//初始化上传文件的临时存放目录
+    File saveDir = null;//初始化上传文件后的保存目录
+  public UploadServlet() {
+    super();
+  }     
+
+  protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    doPost(request,response);
+  }     
+  
+  protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+    try{
+        if(ServletFileUpload.isMultipartContent(request)){
+          DiskFileItemFactory dff = new DiskFileItemFactory();//创建该对象
+          dff.setRepository(tmpDir);//指定上传文件的临时目录
+          dff.setSizeThreshold(1024000);//指定在内存中缓存数据大小,单位为byte
+          ServletFileUpload sfu = new ServletFileUpload(dff);//创建该对象
+          sfu.setFileSizeMax(5000000);//指定单个上传文件的最大尺寸
+          sfu.setSizeMax(10000000);//指定一次上传多个文件的总尺寸
+          FileItemIterator fii = sfu.getItemIterator(request);//解析request 请求,并返回FileItemIterator集合
+          while(fii.hasNext()){
+            FileItemStream fis = fii.next();//从集合中获得一个文件流
+            if(!fis.isFormField() && fis.getName().length()>0){//过滤掉表单中非文件域
+                String fileName = fis.getName().substring(fis.getName().lastIndexOf(""""));//获得上传文件的文件名
+                BufferedInputStream in = new BufferedInputStream(fis.openStream());//获得文件输入流
+                BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(new File(saveDir+fileName)));//获得文件输出流
+                Streams.copy(in, out, true);//开始把文件写到你指定的上传文件夹
+            }
+          }
+          response.getWriter().println("File upload successfully!!!");//终于成功了,还不到你的上传文件中看看,你要的东西都到齐了吗
+        }
+    }catch(Exception e){
+        e.printStackTrace();
+    }
+  }           
+
+  public void init() throws ServletException {
+    /* 对上传文件夹和临时文件夹进行初始化
+    *
+    */
+    super.init();
+      String tmpPath = "c:""tmpdir";
+      String savePath = "c:""updir";
+    tmpDir = new File(tmpPath);
+    saveDir = new File(savePath);
+    if(!tmpDir.isDirectory())
+        tmpDir.mkdir();
+    if(!saveDir.isDirectory())
+        saveDir.mkdir();
+
+    
+  }   
+}
+
+========================================================================================================
+upload.jsp文件有了,配套的servlet也有了,现在最后剩下的就是怎么让它们配合工作了,
+接着我们把WEB-INF/web.xml文件请出来,并在该文件中加入以下内容:
+
+  <servlet>
+    <servlet-name>UploadServlet</servlet-name>
+    <servlet-class>UploadServlet</servlet-class>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>UploadServlet</servlet-name>
+    <url-pattern>/UploadServlet</url-pattern>
+  </servlet-mapping>
+
+写好以后再点击"保存"
+
+==========================================================================================================
+把你的upload项目整个拷贝到tomcat的webapps目录下,启动tomcat.
+打开IE浏览器在地址栏中输入http://localhost:8080/upload/upload.jsp
+怎么样看到上传文件的输入框了吗? 什么,没有看到,出错了! 你仔细检查一下步骤有没有对.
+好了,现在我们点击页面上的"浏览"按钮,找到我们要上传的文件,最后点击"Submit",太激动了,还不看一下你的c:"updir里面有没有你要的东西. 
